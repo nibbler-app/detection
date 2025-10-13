@@ -217,9 +217,117 @@ jobs:
             fi
           fi
 
+  # Generate engines.json after all builds complete (only on tag pushes)
+  generate-manifest:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v') && success()
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Organize artifacts
+        run: |
+          mkdir -p dist
+          # Move all artifacts to dist directory
+          find artifacts -type f -name "*.tar.gz" -exec cp {} dist/ \;
+          find artifacts -type f -name "*.sig" -exec cp {} dist/ \;
+          find artifacts -type f -name "*.sha256" -exec cp {} dist/ \;
+
+          echo "Artifacts in dist:"
+          ls -lh dist/
+
+      - name: Read version
+        id: version
+        run: |
+          VERSION=$(cat VERSION)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Version: $VERSION"
+
+      - name: Detect built platforms
+        id: platforms
+        run: |
+          # Detect platforms from built artifacts
+          PLATFORMS=""
+          for file in dist/hand_near_face_*.tar.gz; do
+            if [ -f "$file" ]; then
+              # Extract platform from filename: hand_near_face_{platform}-{version}.tar.gz
+              filename=$(basename "$file")
+              # Remove engine name prefix
+              temp="${filename#hand_near_face_}"
+              # Extract platform (everything before the version)
+              platform="${temp%%-*}"
+              PLATFORMS="${PLATFORMS}${platform},"
+            fi
+          done
+          # Remove trailing comma
+          PLATFORMS="${PLATFORMS%,}"
+
+          echo "platforms=$PLATFORMS" >> $GITHUB_OUTPUT
+          echo "Detected platforms: $PLATFORMS"
+
+      - name: Generate engines.json
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          PLATFORMS: ${{ steps.platforms.outputs.platforms }}
+          GITHUB_REPO: ${{ github.repository }}
+        run: |
+          BASE_URL="https://github.com/${GITHUB_REPO}/releases/download/v${VERSION}"
+
+          python3 scripts/generate_engines_json.py \
+            --version "${VERSION}" \
+            --base-url "${BASE_URL}" \
+            --dist-dir dist \
+            --output dist/engines.json \
+            --platforms "${PLATFORMS}"
+
+          echo "Generated engines.json:"
+          cat dist/engines.json
+
+      - name: Upload engines.json artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: engines-manifest
+          path: dist/engines.json
+          retention-days: 90
+
+      - name: Upload engines.json to release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: dist/engines.json
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Summary
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          PLATFORMS="${{ steps.platforms.outputs.platforms }}"
+
+          echo "## Manifest Generation Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Version:** $VERSION" >> $GITHUB_STEP_SUMMARY
+          echo "- **Platforms:** $PLATFORMS" >> $GITHUB_STEP_SUMMARY
+          echo "- **File:** engines.json" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### engines.json Preview" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`json" >> $GITHUB_STEP_SUMMARY
+          cat dist/engines.json >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+
   # Summary job that runs after all builds complete
   build-summary:
-    needs: build
+    needs: [build, generate-manifest]
     runs-on: ubuntu-latest
     if: always()
 
@@ -233,6 +341,15 @@ jobs:
             echo "✅ All platform builds completed successfully" >> $GITHUB_STEP_SUMMARY
           else
             echo "❌ Some builds failed. Check individual platform logs." >> $GITHUB_STEP_SUMMARY
+          fi
+
+          # Only show manifest status if it was supposed to run (on tag push)
+          if [ "${{ needs.generate-manifest.result }}" != "skipped" ]; then
+            if [ "${{ needs.generate-manifest.result }}" = "success" ]; then
+              echo "✅ Manifest (engines.json) generated successfully" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "❌ Manifest generation failed." >> $GITHUB_STEP_SUMMARY
+            fi
           fi
 
           echo "" >> $GITHUB_STEP_SUMMARY
