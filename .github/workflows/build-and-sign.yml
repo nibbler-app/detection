@@ -1,0 +1,235 @@
+name: Build and Sign Detection Engine
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-arm64
+            os: macos-latest
+            python-version: '3.12'
+            artifact-extension: tar.gz
+
+          # Uncomment when ready to add Windows support:
+          # - platform: windows-x64
+          #   os: windows-latest
+          #   python-version: '3.12'
+          #   artifact-extension: tar.gz
+
+    runs-on: ${{ matrix.os }}
+
+    name: Build ${{ matrix.platform }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Read version from VERSION file
+        id: version
+        shell: bash
+        run: |
+          VERSION=$(cat VERSION)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Building version: $VERSION"
+
+      - name: Set artifact name
+        id: artifact
+        shell: bash
+        run: |
+          ENGINE_NAME="hand_near_face"
+          PLATFORM="${{ matrix.platform }}"
+          VERSION="${{ steps.version.outputs.version }}"
+          EXTENSION="${{ matrix.artifact-extension }}"
+
+          ARTIFACT_NAME="${ENGINE_NAME}_${PLATFORM}-${VERSION}"
+          BUNDLE_FILE="${ARTIFACT_NAME}.${EXTENSION}"
+
+          echo "artifact_name=$ARTIFACT_NAME" >> $GITHUB_OUTPUT
+          echo "bundle_file=$BUNDLE_FILE" >> $GITHUB_OUTPUT
+          echo "engine_name=$ENGINE_NAME" >> $GITHUB_OUTPUT
+
+      - name: Cache Python dependencies
+        uses: actions/cache@v4
+        with:
+          path: venv
+          key: ${{ runner.os }}-${{ matrix.platform }}-python-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.platform }}-python-
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          python3 -m venv venv
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            source venv/Scripts/activate
+          else
+            source venv/bin/activate
+          fi
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Build bundle
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            source venv/Scripts/activate
+          else
+            source venv/bin/activate
+          fi
+          ./scripts/bundle.sh
+
+      - name: Rename bundle with platform suffix
+        shell: bash
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          ENGINE_NAME="${{ steps.artifact.outputs.engine_name }}"
+          BUNDLE_FILE="${{ steps.artifact.outputs.bundle_file }}"
+
+          # Original bundle name from script
+          ORIGINAL="dist/${ENGINE_NAME}-${VERSION}.tar.gz"
+          TARGET="dist/${BUNDLE_FILE}"
+
+          echo "Renaming: $ORIGINAL -> $TARGET"
+          mv "$ORIGINAL" "$TARGET"
+
+      - name: Install cryptography for signing
+        shell: bash
+        run: |
+          python3 -m pip install cryptography
+
+      - name: Sign bundle
+        if: github.event_name != 'pull_request'
+        env:
+          SIGNING_KEY: ${{ secrets.BUNDLE_SIGNING_KEY }}
+        shell: bash
+        run: |
+          BUNDLE_FILE="dist/${{ steps.artifact.outputs.bundle_file }}"
+
+          # Create temporary keys directory
+          mkdir -p keys
+
+          # Write the signing key from secrets to a file
+          echo "$SIGNING_KEY" > keys/bundle_signing_key.private
+          chmod 600 keys/bundle_signing_key.private
+
+          # Sign the bundle
+          ./scripts/sign.sh "$BUNDLE_FILE"
+
+          # Clean up private key
+          rm -f keys/bundle_signing_key.private
+
+      - name: Calculate checksums
+        shell: bash
+        run: |
+          BUNDLE_FILE="${{ steps.artifact.outputs.bundle_file }}"
+          cd dist
+
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            sha256sum "$BUNDLE_FILE" > "${BUNDLE_FILE}.sha256"
+            if [ -f "${BUNDLE_FILE}.sig" ]; then
+              sha256sum "${BUNDLE_FILE}.sig" > "${BUNDLE_FILE}.sig.sha256"
+            fi
+          else
+            shasum -a 256 "$BUNDLE_FILE" > "${BUNDLE_FILE}.sha256"
+            if [ -f "${BUNDLE_FILE}.sig" ]; then
+              shasum -a 256 "${BUNDLE_FILE}.sig" > "${BUNDLE_FILE}.sig.sha256"
+            fi
+          fi
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.artifact.outputs.artifact_name }}
+          path: |
+            dist/${{ steps.artifact.outputs.bundle_file }}
+            dist/${{ steps.artifact.outputs.bundle_file }}.sig
+            dist/${{ steps.artifact.outputs.bundle_file }}.sha256
+            dist/${{ steps.artifact.outputs.bundle_file }}.sig.sha256
+          retention-days: 90
+          if-no-files-found: error
+
+      - name: Upload to release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            dist/${{ steps.artifact.outputs.bundle_file }}
+            dist/${{ steps.artifact.outputs.bundle_file }}.sig
+            dist/${{ steps.artifact.outputs.bundle_file }}.sha256
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build summary
+        shell: bash
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          PLATFORM="${{ matrix.platform }}"
+          BUNDLE_FILE="${{ steps.artifact.outputs.bundle_file }}"
+
+          echo "## Build Summary - $PLATFORM" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Version:** $VERSION" >> $GITHUB_STEP_SUMMARY
+          echo "- **Platform:** $PLATFORM" >> $GITHUB_STEP_SUMMARY
+          echo "- **OS:** ${{ matrix.os }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Artifacts" >> $GITHUB_STEP_SUMMARY
+          echo "- \`${BUNDLE_FILE}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- \`${BUNDLE_FILE}.sig\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### File Sizes" >> $GITHUB_STEP_SUMMARY
+
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            BUNDLE_SIZE=$(stat -c%s "dist/${BUNDLE_FILE}" 2>/dev/null || echo "0")
+            BUNDLE_SIZE_MB=$((BUNDLE_SIZE / 1024 / 1024))
+            echo "- Bundle: ${BUNDLE_SIZE_MB}MB" >> $GITHUB_STEP_SUMMARY
+          else
+            ls -lh "dist/${BUNDLE_FILE}" | awk '{print "- Bundle: " $5}' >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [ -f "dist/${BUNDLE_FILE}.sig" ]; then
+            if [ "$RUNNER_OS" = "Windows" ]; then
+              SIG_SIZE=$(stat -c%s "dist/${BUNDLE_FILE}.sig" 2>/dev/null || echo "0")
+              echo "- Signature: ${SIG_SIZE} bytes" >> $GITHUB_STEP_SUMMARY
+            else
+              ls -lh "dist/${BUNDLE_FILE}.sig" | awk '{print "- Signature: " $5}' >> $GITHUB_STEP_SUMMARY
+            fi
+          fi
+
+  # Summary job that runs after all builds complete
+  build-summary:
+    needs: build
+    runs-on: ubuntu-latest
+    if: always()
+
+    steps:
+      - name: Overall build status
+        run: |
+          echo "## Overall Build Status" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ needs.build.result }}" = "success" ]; then
+            echo "✅ All platform builds completed successfully" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ Some builds failed. Check individual platform logs." >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Built platforms: Check artifacts for downloads" >> $GITHUB_STEP_SUMMARY
