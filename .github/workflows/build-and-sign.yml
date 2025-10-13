@@ -260,14 +260,20 @@ jobs:
         run: |
           # Detect platforms from built artifacts
           PLATFORMS=""
+          VERSION=$(cat VERSION)
+
           for file in dist/hand_near_face_*.tar.gz; do
             if [ -f "$file" ]; then
               # Extract platform from filename: hand_near_face_{platform}-{version}.tar.gz
               filename=$(basename "$file")
-              # Remove engine name prefix
+              # Remove engine name prefix: hand_near_face_
               temp="${filename#hand_near_face_}"
-              # Extract platform (everything before the version)
-              platform="${temp%%-*}"
+              # Remove .tar.gz suffix
+              temp="${temp%.tar.gz}"
+              # Remove version suffix: -{version}
+              platform="${temp%-${VERSION}}"
+
+              echo "Detected: $filename -> platform: $platform"
               PLATFORMS="${PLATFORMS}${platform},"
             fi
           done
@@ -275,7 +281,7 @@ jobs:
           PLATFORMS="${PLATFORMS%,}"
 
           echo "platforms=$PLATFORMS" >> $GITHUB_OUTPUT
-          echo "Detected platforms: $PLATFORMS"
+          echo "Final platforms list: $PLATFORMS"
 
       - name: Generate engines.json
         env:
