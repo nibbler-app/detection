@@ -147,17 +147,6 @@ cd "$TEMP_DIR"
 # Use -9 for maximum compression
 tar -czf "$BUNDLE_FILE" --options='compression-level=9' "$ENGINE_ID" 2>/dev/null || tar -czf "$BUNDLE_FILE" "$ENGINE_ID"
 
-# Calculate SHA256 checksum
-echo "==> Calculating checksum..."
-if command -v sha256sum &> /dev/null; then
-    CHECKSUM=$(sha256sum "$BUNDLE_FILE" | awk '{print $1}')
-elif command -v shasum &> /dev/null; then
-    CHECKSUM=$(shasum -a 256 "$BUNDLE_FILE" | awk '{print $1}')
-else
-    echo "WARNING: Neither sha256sum nor shasum found, skipping checksum"
-    CHECKSUM="unknown"
-fi
-
 # Get bundle size
 BUNDLE_SIZE=$(stat -f%z "$BUNDLE_FILE" 2>/dev/null || stat -c%s "$BUNDLE_FILE" 2>/dev/null)
 BUNDLE_SIZE_MB=$((BUNDLE_SIZE / 1024 / 1024))
@@ -169,5 +158,4 @@ echo ""
 echo "==> Bundle created successfully!"
 echo "    File: $BUNDLE_FILE"
 echo "    Size: ${BUNDLE_SIZE_MB}MB ($(numfmt --to=iec-i --suffix=B $BUNDLE_SIZE 2>/dev/null || echo "${BUNDLE_SIZE} bytes"))"
-echo "    SHA256: $CHECKSUM"
 echo ""

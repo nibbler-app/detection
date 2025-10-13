@@ -74,24 +74,6 @@ def sign_bundle(bundle_file: Path, private_key: ed25519.Ed25519PrivateKey) -> by
         sys.exit(1)
 
 
-def calculate_checksum(file_path: Path) -> str:
-    """
-    Calculate SHA256 checksum of a file.
-
-    Args:
-        file_path: Path to file
-
-    Returns:
-        Hex string of checksum
-    """
-    sha256_hash = hashlib.sha256()
-    with file_path.open("rb") as f:
-        # Read in chunks to handle large files
-        for byte_block in iter(lambda: f.read(4096), b""):
-            sha256_hash.update(byte_block)
-    return sha256_hash.hexdigest()
-
-
 def main():
     parser = argparse.ArgumentParser(
         description="Sign a bundle with Ed25519 private key"
@@ -143,12 +125,6 @@ def main():
     signature_file = Path(f"{bundle_file}.sig")
     signature_file.write_text(signature_hex)
     print(f"Signature saved to: {signature_file}")
-
-    # Calculate and display checksum
-    print()
-    print("==> Bundle checksum:")
-    checksum = calculate_checksum(bundle_file)
-    print(f"{checksum}  {bundle_file.name}")
 
 
 if __name__ == "__main__":

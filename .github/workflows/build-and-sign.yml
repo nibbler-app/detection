@@ -139,24 +139,6 @@ jobs:
           # Clean up private key
           rm -f keys/bundle_signing_key.private
 
-      - name: Calculate checksums
-        shell: bash
-        run: |
-          BUNDLE_FILE="${{ steps.artifact.outputs.bundle_file }}"
-          cd dist
-
-          if [ "$RUNNER_OS" = "Windows" ]; then
-            sha256sum "$BUNDLE_FILE" > "${BUNDLE_FILE}.sha256"
-            if [ -f "${BUNDLE_FILE}.sig" ]; then
-              sha256sum "${BUNDLE_FILE}.sig" > "${BUNDLE_FILE}.sig.sha256"
-            fi
-          else
-            shasum -a 256 "$BUNDLE_FILE" > "${BUNDLE_FILE}.sha256"
-            if [ -f "${BUNDLE_FILE}.sig" ]; then
-              shasum -a 256 "${BUNDLE_FILE}.sig" > "${BUNDLE_FILE}.sig.sha256"
-            fi
-          fi
-
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -164,8 +146,6 @@ jobs:
           path: |
             dist/${{ steps.artifact.outputs.bundle_file }}
             dist/${{ steps.artifact.outputs.bundle_file }}.sig
-            dist/${{ steps.artifact.outputs.bundle_file }}.sha256
-            dist/${{ steps.artifact.outputs.bundle_file }}.sig.sha256
           retention-days: 90
           if-no-files-found: error
 
@@ -176,7 +156,6 @@ jobs:
           files: |
             dist/${{ steps.artifact.outputs.bundle_file }}
             dist/${{ steps.artifact.outputs.bundle_file }}.sig
-            dist/${{ steps.artifact.outputs.bundle_file }}.sha256
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -243,7 +222,6 @@ jobs:
           # Move all artifacts to dist directory
           find artifacts -type f -name "*.tar.gz" -exec cp {} dist/ \;
           find artifacts -type f -name "*.sig" -exec cp {} dist/ \;
-          find artifacts -type f -name "*.sha256" -exec cp {} dist/ \;
 
           echo "Artifacts in dist:"
           ls -lh dist/
