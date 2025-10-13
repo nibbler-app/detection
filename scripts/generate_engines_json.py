@@ -17,8 +17,8 @@ Options:
 """
 
 import argparse
+import hashlib
 import json
-import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -29,6 +29,44 @@ def get_file_size(file_path: Path) -> int:
     if file_path.exists():
         return file_path.stat().st_size
     return 0
+
+
+def get_file_checksum(file_path: Path) -> str | None:
+    """
+    Get SHA256 checksum of a file.
+
+    First tries to read from .sha256 file, then calculates directly.
+
+    Args:
+        file_path: Path to file
+
+    Returns:
+        SHA256 checksum as hex string, or None if file doesn't exist
+    """
+    if not file_path.exists():
+        return None
+
+    # Try to read from .sha256 file first
+    sha256_file = Path(f"{file_path}.sha256")
+    if sha256_file.exists():
+        try:
+            content = sha256_file.read_text().strip()
+            # SHA256 files typically have format: "hash  filename"
+            checksum = content.split()[0]
+            return checksum
+        except Exception as e:
+            print(f"Warning: Could not read {sha256_file}: {e}", file=sys.stderr)
+
+    # Calculate checksum directly
+    try:
+        sha256_hash = hashlib.sha256()
+        with file_path.open("rb") as f:
+            for byte_block in iter(lambda: f.read(4096), b""):
+                sha256_hash.update(byte_block)
+        return sha256_hash.hexdigest()
+    except Exception as e:
+        print(f"Warning: Could not calculate checksum for {file_path}: {e}", file=sys.stderr)
+        return None
 
 
 def generate_engines_json(
@@ -74,15 +112,24 @@ def generate_engines_json(
             print(f"Warning: Bundle not found or empty: {bundle_path}", file=sys.stderr)
             continue
 
+        # Get checksum
+        checksum = get_file_checksum(bundle_path)
+
         # Construct URLs
         bundle_url = f"{base_url}/{bundle_file}"
         sig_url = f"{base_url}/{sig_file}"
 
-        platform_data[platform] = {
+        platform_entry = {
             "url": bundle_url,
             "signature": sig_url,
             "size": size,
         }
+
+        # Add checksum if available
+        if checksum:
+            platform_entry["checksum"] = checksum
+
+        platform_data[platform] = platform_entry
 
     if not platform_data:
         raise ValueError("No valid platforms found with built artifacts")

@@ -36,15 +36,15 @@ echo "==> Using temporary directory: $TEMP_DIR"
 # Copy detection code
 echo "==> Copying detection code..."
 if [ -d "$PROJECT_ROOT/src" ]; then
-    cp -r "$PROJECT_ROOT/src" "$BUILD_DIR/detection_code"
+    cp -r "$PROJECT_ROOT/src" "$BUILD_DIR/src"
 else
-    cp -r "$PROJECT_ROOT/python_app" "$BUILD_DIR/detection_code"
+    cp -r "$PROJECT_ROOT/python_app" "$BUILD_DIR/src"
 fi
 
 # Remove unnecessary files from detection code
-rm -rf "$BUILD_DIR/detection_code/__pycache__"
-rm -rf "$BUILD_DIR/detection_code/.pytest_cache"
-rm -f "$BUILD_DIR/detection_code"/*.pyc
+rm -rf "$BUILD_DIR/src/__pycache__"
+rm -rf "$BUILD_DIR/src/.pytest_cache"
+rm -f "$BUILD_DIR/src"/*.pyc
 
 # Copy virtual environment
 echo "==> Copying Python virtual environment..."
@@ -171,7 +171,3 @@ echo "    File: $BUNDLE_FILE"
 echo "    Size: ${BUNDLE_SIZE_MB}MB ($(numfmt --to=iec-i --suffix=B $BUNDLE_SIZE 2>/dev/null || echo "${BUNDLE_SIZE} bytes"))"
 echo "    SHA256: $CHECKSUM"
 echo ""
-echo "Next steps:"
-echo "  1. Sign the bundle: ./scripts/sign_bundle.sh $BUNDLE_FILE"
-echo "  2. Upload to distribution server"
-echo "  3. Update engine registry with checksum and signature"

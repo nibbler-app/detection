@@ -134,7 +134,7 @@ jobs:
           chmod 600 keys/bundle_signing_key.private
 
           # Sign the bundle
-          ./scripts/sign.sh "$BUNDLE_FILE"
+          python3 scripts/sign.py "$BUNDLE_FILE"
 
           # Clean up private key
           rm -f keys/bundle_signing_key.private
