@@ -46,6 +46,7 @@ export PRIVATE_KEY_FILE
 python3 << 'EOF'
 import sys
 import os
+import hashlib
 from cryptography.hazmat.primitives.asymmetric import ed25519
 from cryptography.hazmat.primitives import serialization
 
@@ -57,6 +58,9 @@ private_key_file = os.environ.get('PRIVATE_KEY_FILE')
 with open(bundle_file, 'rb') as f:
     bundle_data = f.read()
 
+# Hash the bundle data with SHA256 (to match Rust verification logic)
+bundle_hash = hashlib.sha256(bundle_data).digest()
+
 # Read the private key hex
 with open(private_key_file, 'r') as f:
     private_key_hex = f.read().strip()
@@ -67,8 +71,8 @@ private_key_bytes = bytes.fromhex(private_key_hex)
 # Load the private key
 private_key = ed25519.Ed25519PrivateKey.from_private_bytes(private_key_bytes)
 
-# Sign the bundle data
-signature = private_key.sign(bundle_data)
+# Sign the hash (not the raw data)
+signature = private_key.sign(bundle_hash)
 
 # Convert signature to hex
 signature_hex = signature.hex()
