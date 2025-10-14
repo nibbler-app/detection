@@ -16,10 +16,11 @@ Options:
 """
 
 import argparse
+import hashlib
 import json
 import sys
 from datetime import datetime, timezone
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 from pathlib import Path
 
 
@@ -28,6 +29,7 @@ class PlatformData:
     url: str
     signature: str
     size: int
+    checksum: str
 
 
 @dataclass
@@ -42,6 +44,15 @@ def get_file_size(file_path: Path) -> int:
     if file_path.exists():
         return file_path.stat().st_size
     return 0
+
+
+def calculate_checksum(file_path: Path) -> str:
+    """Calculate SHA256 checksum of a file"""
+    sha256_hash = hashlib.sha256()
+    with open(file_path, "rb") as f:
+        for byte_block in iter(lambda: f.read(4096), b""):
+            sha256_hash.update(byte_block)
+    return sha256_hash.hexdigest()
 
 
 def generate_engines_json(
@@ -66,10 +77,13 @@ def generate_engines_json(
             print(f"Warning: Bundle not found or empty: {bundle_path}", file=sys.stderr)
             continue
 
+        checksum = calculate_checksum(bundle_path)
+
         platform_data[platform] = PlatformData(
             url=f"{base_url}/{bundle_file}",
             signature=f"{base_url}/{sig_file}",
             size=size,
+            checksum=checksum,
         )
 
     if not platform_data:
@@ -148,7 +162,7 @@ def main():
         args.output.parent.mkdir(parents=True, exist_ok=True)
 
         with open(args.output, "w") as f:
-            json.dump(engines_data, f, indent=4)
+            json.dump(asdict(engines_data), f, indent=4)
 
         print(f"\nEngines.json written to: {args.output}")
         print(f"Size: {args.output.stat().st_size} bytes")

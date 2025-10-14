@@ -5,7 +5,7 @@ on:
     branches:
       - main
     tags:
-      - 'v*'
+      - "v*"
   pull_request:
     branches:
       - main
@@ -23,7 +23,7 @@ jobs:
         include:
           - platform: macos-arm64
             os: macos-latest
-            python-version: '3.12'
+            python-version: "3.12"
             artifact-extension: tar.gz
 
           # Uncomment when ready to add Windows support:
@@ -57,17 +57,15 @@ jobs:
         id: artifact
         shell: bash
         run: |
-          ENGINE_NAME="hand_near_face"
           PLATFORM="${{ matrix.platform }}"
           VERSION="${{ steps.version.outputs.version }}"
           EXTENSION="${{ matrix.artifact-extension }}"
 
-          ARTIFACT_NAME="${ENGINE_NAME}_${PLATFORM}-${VERSION}"
+          ARTIFACT_NAME="${PLATFORM}-${VERSION}"
           BUNDLE_FILE="${ARTIFACT_NAME}.${EXTENSION}"
 
           echo "artifact_name=$ARTIFACT_NAME" >> $GITHUB_OUTPUT
           echo "bundle_file=$BUNDLE_FILE" >> $GITHUB_OUTPUT
-          echo "engine_name=$ENGINE_NAME" >> $GITHUB_OUTPUT
 
       - name: Cache Python dependencies
         uses: actions/cache@v4
@@ -103,11 +101,10 @@ jobs:
         shell: bash
         run: |
           VERSION="${{ steps.version.outputs.version }}"
-          ENGINE_NAME="${{ steps.artifact.outputs.engine_name }}"
           BUNDLE_FILE="${{ steps.artifact.outputs.bundle_file }}"
 
-          # Original bundle name from script
-          ORIGINAL="dist/${ENGINE_NAME}-${VERSION}.tar.gz"
+          # Original bundle name from script (engine-{version}.tar.gz)
+          ORIGINAL="dist/engine-${VERSION}.tar.gz"
           TARGET="dist/${BUNDLE_FILE}"
 
           echo "Renaming: $ORIGINAL -> $TARGET"
@@ -209,7 +206,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: "3.12"
 
       - name: Download all artifacts
         uses: actions/download-artifact@v4
@@ -240,14 +237,12 @@ jobs:
           PLATFORMS=""
           VERSION=$(cat VERSION)
 
-          for file in dist/hand_near_face_*.tar.gz; do
+          for file in dist/*.tar.gz; do
             if [ -f "$file" ]; then
-              # Extract platform from filename: hand_near_face_{platform}-{version}.tar.gz
+              # Extract platform from filename: {platform}-{version}.tar.gz
               filename=$(basename "$file")
-              # Remove engine name prefix: hand_near_face_
-              temp="${filename#hand_near_face_}"
               # Remove .tar.gz suffix
-              temp="${temp%.tar.gz}"
+              temp="${filename%.tar.gz}"
               # Remove version suffix: -{version}
               platform="${temp%-${VERSION}}"
 

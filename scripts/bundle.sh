@@ -11,7 +11,6 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 OUTPUT_DIR="${1:-$PROJECT_ROOT/dist}"
-ENGINE_ID="hand_near_face"
 
 # Read version from VERSION file
 VERSION_FILE="$PROJECT_ROOT/VERSION"
@@ -21,15 +20,14 @@ if [ ! -f "$VERSION_FILE" ]; then
 fi
 VERSION=$(cat "$VERSION_FILE")
 
-echo "==> Bundling Python engine (OPTIMIZED): $ENGINE_ID v$VERSION"
+echo "==> Bundling Python engine (OPTIMIZED): v$VERSION"
 
 # Create output directory
 mkdir -p "$OUTPUT_DIR"
 
 # Create temporary build directory
 TEMP_DIR=$(mktemp -d)
-BUILD_DIR="$TEMP_DIR/$ENGINE_ID"
-mkdir -p "$BUILD_DIR"
+BUILD_DIR="$TEMP_DIR"
 
 echo "==> Using temporary directory: $TEMP_DIR"
 
@@ -140,12 +138,13 @@ else
 fi
 
 # Create bundle archive with better compression
-BUNDLE_FILE="$OUTPUT_DIR/${ENGINE_ID}-${VERSION}.tar.gz"
+BUNDLE_FILE="$OUTPUT_DIR/engine-${VERSION}.tar.gz"
 echo "==> Creating bundle archive with optimized compression: $BUNDLE_FILE"
 
 cd "$TEMP_DIR"
 # Use -9 for maximum compression
-tar -czf "$BUNDLE_FILE" --options='compression-level=9' "$ENGINE_ID" 2>/dev/null || tar -czf "$BUNDLE_FILE" "$ENGINE_ID"
+# Archive src and python directories directly (not wrapped in a parent directory)
+tar -czf "$BUNDLE_FILE" --options='compression-level=9' src python 2>/dev/null || tar -czf "$BUNDLE_FILE" src python
 
 # Get bundle size
 BUNDLE_SIZE=$(stat -f%z "$BUNDLE_FILE" 2>/dev/null || stat -c%s "$BUNDLE_FILE" 2>/dev/null)
