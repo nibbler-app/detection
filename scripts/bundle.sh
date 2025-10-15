@@ -44,13 +44,26 @@ rm -rf "$BUILD_DIR/src/__pycache__"
 rm -rf "$BUILD_DIR/src/.pytest_cache"
 rm -f "$BUILD_DIR/src"/*.pyc
 
-# Copy virtual environment
-echo "==> Copying Python virtual environment..."
+# Copy Python packages (not the entire venv - just site-packages for PyO3 compatibility)
+echo "==> Copying Python packages..."
 if [ -d "$PROJECT_ROOT/venv" ]; then
-    cp -r "$PROJECT_ROOT/venv" "$BUILD_DIR/python"
+    # Find site-packages directory
+    VENV_SITE_PACKAGES=$(find "$PROJECT_ROOT/venv/lib" -type d -name "site-packages" | head -1)
+
+    if [ -z "$VENV_SITE_PACKAGES" ]; then
+        echo "ERROR: Could not find site-packages in venv"
+        rm -rf "$TEMP_DIR"
+        exit 1
+    fi
+
+    echo "Found site-packages at: $VENV_SITE_PACKAGES"
+
+    # Copy site-packages to lib/ directory
+    mkdir -p "$BUILD_DIR/lib"
+    cp -r "$VENV_SITE_PACKAGES"/* "$BUILD_DIR/lib/"
 
     echo "==> Optimizing bundle size..."
-    SITE_PACKAGES="$BUILD_DIR/python/lib/python*/site-packages"
+    SITE_PACKAGES="$BUILD_DIR/lib"
 
     # 1. Remove pip and setuptools
     echo "  - Removing pip and setuptools..."
@@ -61,8 +74,8 @@ if [ -d "$PROJECT_ROOT/venv" ]; then
 
     # 2. Remove all .pyc files and __pycache__
     echo "  - Removing .pyc files and __pycache__..."
-    find "$BUILD_DIR/python" -name "*.pyc" -delete
-    find "$BUILD_DIR/python" -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
+    find "$BUILD_DIR/lib" -name "*.pyc" -delete
+    find "$BUILD_DIR/lib" -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
 
     # 3. Remove test directories and files
     echo "  - Removing test files..."
@@ -108,7 +121,7 @@ if [ -d "$PROJECT_ROOT/venv" ]; then
     # 10. Strip debug symbols from native libraries (can save 30-50%)
     if command -v strip &> /dev/null; then
         echo "  - Stripping debug symbols from native libraries..."
-        find "$BUILD_DIR/python" \( -name "*.so" -o -name "*.dylib" \) -exec strip -x {} \; 2>/dev/null || true
+        find "$BUILD_DIR/lib" \( -name "*.so" -o -name "*.dylib" \) -exec strip -x {} \; 2>/dev/null || true
     fi
 
     # 11. Remove .dist-info for packages we don't need metadata for
@@ -126,7 +139,7 @@ if [ -d "$PROJECT_ROOT/venv" ]; then
 
     # 13. Remove cached files
     echo "  - Removing cached files..."
-    find "$BUILD_DIR/python" -name "*.cache" -delete 2>/dev/null || true
+    find "$BUILD_DIR/lib" -name "*.cache" -delete 2>/dev/null || true
 
     echo "==> Optimization complete!"
 
@@ -143,8 +156,8 @@ echo "==> Creating bundle archive with optimized compression: $BUNDLE_FILE"
 
 cd "$TEMP_DIR"
 # Use -9 for maximum compression
-# Archive src and python directories directly (not wrapped in a parent directory)
-tar -czf "$BUNDLE_FILE" --options='compression-level=9' src python 2>/dev/null || tar -czf "$BUNDLE_FILE" src python
+# Archive src and lib directories directly (not wrapped in a parent directory)
+tar -czf "$BUNDLE_FILE" --options='compression-level=9' src lib 2>/dev/null || tar -czf "$BUNDLE_FILE" src lib
 
 # Get bundle size
 BUNDLE_SIZE=$(stat -f%z "$BUNDLE_FILE" 2>/dev/null || stat -c%s "$BUNDLE_FILE" 2>/dev/null)
