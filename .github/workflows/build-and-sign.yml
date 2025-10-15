@@ -95,7 +95,8 @@ jobs:
           else
             source venv/bin/activate
           fi
-          ./scripts/bundle.sh
+          # Pass platform to bundle script
+          ./scripts/bundle.sh dist ${{ matrix.platform }}
 
       - name: Rename bundle with platform suffix
         shell: bash
@@ -262,7 +263,7 @@ jobs:
           PLATFORMS: ${{ steps.platforms.outputs.platforms }}
           GITHUB_REPO: ${{ github.repository }}
         run: |
-          BASE_URL="https://github.com/${GITHUB_REPO}/releases/download/v${VERSION}"
+          BASE_URL="https://github.com/${GITHUB_REPO}/releases/download/${VERSION}"
 
           python3 scripts/generate_engines_json.py \
             --version "${VERSION}" \

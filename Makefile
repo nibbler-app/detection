@@ -34,8 +34,8 @@ serve:
 # Git tagging
 tag:
 	@VERSION=$$(cat VERSION); \
-	echo "Creating tag v$$VERSION..."; \
-	git tag -a "v$$VERSION" -m "Release v$$VERSION"; \
-	echo "Pushing tag v$$VERSION..."; \
-	git push origin "v$$VERSION"; \
-	echo "Tag v$$VERSION created and pushed successfully!"
+	echo "Creating tag $$VERSION..."; \
+	git tag -a "$$VERSION" -m "Release $$VERSION"; \
+	echo "Pushing tag $$VERSION..."; \
+	git push origin "$$VERSION"; \
+	echo "Tag $$VERSION created and pushed successfully!"

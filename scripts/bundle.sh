@@ -1,16 +1,18 @@
 #!/bin/bash
 # Optimized Bundle Python engine for distribution
 #
-# This script packages the Python detection code and virtual environment
+# This script packages the Python detection code, dependencies, and portable Python
 # into a distributable tar.gz bundle with aggressive size optimization.
 #
-# Usage: ./bundle_python_engine_optimized.sh [output_dir]
+# Usage: ./bundle.sh [output_dir] [platform]
+# Platform: macos-arm64 (default), macos-x64, linux-x64, windows-x64
 
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 OUTPUT_DIR="${1:-$PROJECT_ROOT/dist}"
+PLATFORM="${2:-macos-arm64}"  # Default to macOS ARM64
 
 # Read version from VERSION file
 VERSION_FILE="$PROJECT_ROOT/VERSION"
@@ -20,10 +22,11 @@ if [ ! -f "$VERSION_FILE" ]; then
 fi
 VERSION=$(cat "$VERSION_FILE")
 
-echo "==> Bundling Python engine (OPTIMIZED): v$VERSION"
+echo "==> Bundling Python engine (OPTIMIZED): v$VERSION for $PLATFORM"
 
-# Create output directory
+# Create output directory and convert to absolute path
 mkdir -p "$OUTPUT_DIR"
+OUTPUT_DIR="$(cd "$OUTPUT_DIR" && pwd)"
 
 # Create temporary build directory
 TEMP_DIR=$(mktemp -d)
@@ -43,6 +46,10 @@ fi
 rm -rf "$BUILD_DIR/src/__pycache__"
 rm -rf "$BUILD_DIR/src/.pytest_cache"
 rm -f "$BUILD_DIR/src"/*.pyc
+
+# Download portable Python
+echo "==> Downloading portable Python for $PLATFORM..."
+"$SCRIPT_DIR/download_python.sh" "$PLATFORM" "$BUILD_DIR"
 
 # Copy Python packages (not the entire venv - just site-packages for PyO3 compatibility)
 echo "==> Copying Python packages..."
@@ -156,8 +163,8 @@ echo "==> Creating bundle archive with optimized compression: $BUNDLE_FILE"
 
 cd "$TEMP_DIR"
 # Use -9 for maximum compression
-# Archive src and lib directories directly (not wrapped in a parent directory)
-tar -czf "$BUNDLE_FILE" --options='compression-level=9' src lib 2>/dev/null || tar -czf "$BUNDLE_FILE" src lib
+# Archive src, lib, and python directories directly (not wrapped in a parent directory)
+tar -czf "$BUNDLE_FILE" --options='compression-level=9' src lib python 2>/dev/null || tar -czf "$BUNDLE_FILE" src lib python
 
 # Get bundle size
 BUNDLE_SIZE=$(stat -f%z "$BUNDLE_FILE" 2>/dev/null || stat -c%s "$BUNDLE_FILE" 2>/dev/null)

@@ -29,27 +29,31 @@ if [ -z "$CURRENT_VERSION" ]; then
     exit 1
 fi
 
+# Strip "v" prefix if present (for backward compatibility)
+CURRENT_VERSION_STRIPPED="${CURRENT_VERSION#v}"
+
 echo -e "${BLUE}Current version: ${GREEN}$CURRENT_VERSION${NC}"
 echo ""
 
-# Parse version components
-IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT_VERSION"
+# Parse version components (without "v" prefix)
+IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT_VERSION_STRIPPED"
 
 # Function to update version in files
 update_version() {
     local new_version="$1"
 
-    echo -e "${YELLOW}Updating to version: ${GREEN}$new_version${NC}"
+    echo -e "${YELLOW}Updating to version: ${GREEN}v$new_version${NC}"
     echo ""
 
-    echo "$new_version" > "$VERSION_FILE"
+    # Write version with "v" prefix
+    echo "v$new_version" > "$VERSION_FILE"
 
     if [ -f "$BUNDLE_SCRIPT" ]; then
-        sed -i.bak "s/^VERSION=\"[^\"]*\"/VERSION=\"$new_version\"/" "$BUNDLE_SCRIPT"
+        sed -i.bak "s/^VERSION=\"[^\"]*\"/VERSION=\"v$new_version\"/" "$BUNDLE_SCRIPT"
         rm "${BUNDLE_SCRIPT}.bak"
     fi
 
-    echo -e "${GREEN}Version updated successfully${NC}"
+    echo -e "${GREEN}Version updated successfully to v$new_version${NC}"
 }
 
 # Interactive mode if no argument provided
@@ -111,7 +115,7 @@ fi
 
 # Confirm before updating
 echo ""
-echo -e "${YELLOW}Version will be changed from ${RED}$CURRENT_VERSION${YELLOW} to ${GREEN}$NEW_VERSION${NC}"
+echo -e "${YELLOW}Version will be changed from ${RED}$CURRENT_VERSION${YELLOW} to ${GREEN}v$NEW_VERSION${NC}"
 read -p "Continue? (y/n): " -n 1 -r
 echo ""
 
