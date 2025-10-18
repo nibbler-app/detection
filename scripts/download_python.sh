@@ -26,23 +26,23 @@ PYTHON_BUILD_STANDALONE_VERSION="20241016"
 case "$PLATFORM" in
     macos-arm64)
         PBS_PLATFORM="aarch64-apple-darwin"
-        PBS_FLAVOR="install_only"
-        ARCHIVE_EXT="tar.gz"
+        PBS_FLAVOR="pgo+lto-full"
+        ARCHIVE_EXT="tar.zst"
         ;;
     macos-x64)
         PBS_PLATFORM="x86_64-apple-darwin"
-        PBS_FLAVOR="install_only"
-        ARCHIVE_EXT="tar.gz"
+        PBS_FLAVOR="pgo+lto-full"
+        ARCHIVE_EXT="tar.zst"
         ;;
     linux-x64)
         PBS_PLATFORM="x86_64-unknown-linux-gnu"
-        PBS_FLAVOR="install_only"
-        ARCHIVE_EXT="tar.gz"
+        PBS_FLAVOR="pgo+lto-full"
+        ARCHIVE_EXT="tar.zst"
         ;;
     windows-x64)
         PBS_PLATFORM="x86_64-pc-windows-msvc"
-        PBS_FLAVOR="install_only"
-        ARCHIVE_EXT="tar.gz"
+        PBS_FLAVOR="pgo-full"
+        ARCHIVE_EXT="tar.zst"
         ;;
     *)
         echo "ERROR: Unknown platform: $PLATFORM"
@@ -76,7 +76,23 @@ echo "==> Extracting to: $EXTRACT_DIR"
 rm -rf "$EXTRACT_DIR"
 mkdir -p "$EXTRACT_DIR"
 
-tar -xzf "$DOWNLOAD_PATH" -C "$EXTRACT_DIR"
+# Extract based on archive type
+if [[ "$ARCHIVE_EXT" == "tar.zst" ]]; then
+    # Check if zstd is available
+    if ! command -v zstd &> /dev/null; then
+        echo "ERROR: zstd is required to extract .tar.zst files"
+        echo "Install with: brew install zstd"
+        exit 1
+    fi
+    # Decompress to temporary tar file, then extract
+    echo "==> Decompressing with zstd..."
+    zstd -d "$DOWNLOAD_PATH" -o "$OUTPUT_DIR/temp.tar"
+    echo "==> Extracting tar archive..."
+    tar -xf "$OUTPUT_DIR/temp.tar" -C "$EXTRACT_DIR"
+    rm "$OUTPUT_DIR/temp.tar"
+else
+    tar -xzf "$DOWNLOAD_PATH" -C "$EXTRACT_DIR"
+fi
 
 # The extracted directory is named 'python'
 if [ ! -d "$EXTRACT_DIR/python" ]; then

@@ -51,6 +51,15 @@ rm -f "$BUILD_DIR/src"/*.pyc
 echo "==> Downloading portable Python for $PLATFORM..."
 "$SCRIPT_DIR/download_python.sh" "$PLATFORM" "$BUILD_DIR"
 
+# The full Python build extracts to python/install subdirectory
+# Move install directory contents to python/ for simpler bundling
+if [ -d "$BUILD_DIR/python/install" ]; then
+    echo "==> Restructuring Python installation..."
+    mv "$BUILD_DIR/python/install" "$BUILD_DIR/python_temp"
+    rm -rf "$BUILD_DIR/python"
+    mv "$BUILD_DIR/python_temp" "$BUILD_DIR/python"
+fi
+
 # Copy Python packages (not the entire venv - just site-packages for PyO3 compatibility)
 echo "==> Copying Python packages..."
 if [ -d "$PROJECT_ROOT/venv" ]; then
